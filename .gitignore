@@ -1,0 +1,95 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.conda/
+conda-env/
+
+# Packaging / build
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Testing / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pyre/
+
+# Jupyter
+.ipynb_checkpoints
+
+# IDE / Editor
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# OS-specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Environment / secrets
+.env
+*.env
+
+# Flask / SQLite databases
+instance/
+*.db
+*.sqlite3
+proctoring.db
+
+# App uploads (evidence and temp files)
+static/uploads/evidence/
+static/uploads/tmp/
+
+# Model weights and large binaries
+*.pt
+*.onnx
+models/*.pt
+
+# Temporary files
+tmp/
+temp/
+
+# Node (if ever used)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

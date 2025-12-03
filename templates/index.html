@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="text-center mb-5">
+            <h1 class="display-4 text-primary">
+                <i class="fas fa-shield-alt"></i> ProctGuard
+            </h1>
+            <p class="lead">Secure Online Proctoring System</p>
+        </div>
+
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 border-primary">
+                    <div class="card-body text-center">
+                        <i class="fas fa-user-graduate fa-3x text-primary mb-3"></i>
+                        <h4 class="card-title">Student Portal</h4>
+                        <p class="card-text">Take supervised tests with real-time monitoring for academic integrity.</p>
+                        <a href="{{ url_for('student_portal') }}" class="btn btn-primary btn-lg">
+                            <i class="fas fa-play"></i> Start Test
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 mb-4">
+                <div class="card h-100 border-success">
+                    <div class="card-body text-center">
+                        <i class="fas fa-user-shield fa-3x text-success mb-3"></i>
+                        <h4 class="card-title">Supervisor Dashboard</h4>
+                        <p class="card-text">Monitor test sessions, review cheating logs, and manage assessments.</p>
+                        <a href="{{ url_for('admin_dashboard') }}" class="btn btn-success btn-lg">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <i class="fas fa-eye"></i> Monitoring Features
+                        </h5>
+                        <div class="row">
+                            <div class="col-md-3 text-center">
+                                <i class="fas fa-camera fa-2x text-info mb-2"></i>
+                                <p><strong>Face Detection</strong><br>Real-time face tracking</p>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <i class="fas fa-mobile-alt fa-2x text-warning mb-2"></i>
+                                <p><strong>Phone Detection</strong><br>Identify mobile devices</p>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <i class="fas fa-microphone fa-2x text-danger mb-2"></i>
+                                <p><strong>Audio Monitoring</strong><br>Detect conversations</p>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <i class="fas fa-window-restore fa-2x text-secondary mb-2"></i>
+                                <p><strong>Tab Switching</strong><br>Track browser activity</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

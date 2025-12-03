@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Session Details - ProctGuard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item">
+                    <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+                </li>
+                <li class="breadcrumb-item active">Session Details</li>
+            </ol>
+        </nav>
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-user-graduate"></i> {{ session.student_name }} - Session Details</h2>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+
+        <!-- Session Overview -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-info-circle"></i> Session Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-4">Student:</dt>
+                            <dd class="col-sm-8">{{ session.student_name }}</dd>
+                            
+                            <dt class="col-sm-4">Test ID:</dt>
+                            <dd class="col-sm-8">#{{ session.test_id }}</dd>
+                            
+                            <dt class="col-sm-4">Start Time:</dt>
+                            <dd class="col-sm-8">{{ session.start_time }}</dd>
+                            
+                            <dt class="col-sm-4">End Time:</dt>
+                            <dd class="col-sm-8">
+                                {% if session.end_time %}
+                                    {{ session.end_time }}
+                                {% else %}
+                                    <span class="badge bg-warning">Ongoing</span>
+                                {% endif %}
+                            </dd>
+                            
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge bg-{% if session.status == 'COMPLETED' %}success{% elif session.status == 'IN_PROGRESS' %}primary{% else %}secondary{% endif %}">
+                                    {{ session.status }}
+                                </span>
+                            </dd>
+                            
+                            <dt class="col-sm-4">Score:</dt>
+                            <dd class="col-sm-8">
+                                {% if session.score %}
+                                    <span class="badge bg-{% if session.score >= 70 %}success{% elif session.score >= 50 %}warning{% else %}danger{% endif %}">
+                                        {{ session.score|round(1) }}%
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted">Not completed</span>
+                                {% endif %}
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-chart-pie"></i> Cheating Analysis</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label">Cheating Probability Score:</label>
+                            <div class="progress mb-2" style="height: 25px;">
+                                {% set cheating_score = session.cheating_score or 0 %}
+                                <div class="progress-bar cheating-score-bar bg-{% if cheating_score < 30 %}success{% elif cheating_score < 70 %}warning{% else %}danger{% endif %}" 
+                                     data-score="{{ cheating_score }}" role="progressbar">
+                                    {{ cheating_score|round(1) }}%
+                                </div>
+                            </div>
+                            <small class="text-muted">
+                                Based on violation frequency and severity
+                            </small>
+                        </div>
+                        
+                        <div class="row text-center">
+                            <div class="col-4">
+                                <h4 class="text-danger">{{ logs|selectattr('severity', 'equalto', 'HIGH')|list|length }}</h4>
+                                <small class="text-muted">High Risk</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="text-warning">{{ logs|selectattr('severity', 'equalto', 'MEDIUM')|list|length }}</h4>
+                                <small class="text-muted">Medium Risk</small>
+                            </div>
+                            <div class="col-4">
+                                <h4 class="text-info">{{ logs|selectattr('severity', 'equalto', 'LOW')|list|length }}</h4>
+                                <small class="text-muted">Low Risk</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Violation Logs -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-exclamation-triangle"></i> Violation Log ({{ logs|length }} incidents)</h5>
+            </div>
+            <div class="card-body">
+                {% if logs %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>Violation Type</th>
+                                <th>Description</th>
+                                <th>Severity</th>
+                                <th>Evidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs %}
+                            <tr>
+                                <td>
+                                    <small>{{ log.timestamp[:19] }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ log.violation_type }}</span>
+                                </td>
+                                <td>{{ log.description }}</td>
+                                <td>
+                                    <span class="badge bg-{% if log.severity == 'HIGH' %}danger{% elif log.severity == 'MEDIUM' %}warning{% else %}info{% endif %}">
+                                        {{ log.severity }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if log.evidence_path %}
+                                        {% if log.evidence_path.endswith(('.jpg', '.jpeg', '.png')) %}
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewEvidence('{{ log.evidence_path }}', 'image')">
+                                                <i class="fas fa-image"></i> Screenshot
+                                            </button>
+                                        {% elif log.evidence_path.endswith('.wav') %}
+                                            <button class="btn btn-sm btn-outline-primary" onclick="viewEvidence('{{ log.evidence_path }}', 'audio')">
+                                                <i class="fas fa-volume-up"></i> Audio
+                                            </button>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">No evidence</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                    <h5>No violations detected</h5>
+                    <p class="text-muted">This session completed without any integrity issues.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Evidence Modal -->
+<div class="modal fade" id="evidenceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Evidence Review</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div id="evidenceContent"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function viewEvidence(evidencePath, type) {
+    const modal = new bootstrap.Modal(document.getElementById('evidenceModal'));
+    const content = document.getElementById('evidenceContent');
+    
+    if (type === 'image') {
+        content.innerHTML = `<img src="${evidencePath}" class="img-fluid" alt="Evidence Screenshot">`;
+    } else if (type === 'audio') {
+        content.innerHTML = `
+            <audio controls class="w-100">
+                <source src="${evidencePath}" type="audio/wav">
+                Your browser does not support the audio element.
+            </audio>
+        `;
+    }
+    
+    modal.show();
+}
+
+// Set progress bar widths from data attributes
+document.addEventListener('DOMContentLoaded', function() {
+    const progressBars = document.querySelectorAll('.cheating-score-bar');
+    progressBars.forEach(bar => {
+        const score = bar.getAttribute('data-score');
+        if (score) {
+            bar.style.width = score + '%';
+        }
+    });
+});
+</script>
+{% endblock %}

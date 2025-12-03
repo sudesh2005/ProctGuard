@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Student Portal - ProctGuard{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="text-center mb-4">
+            <h2><i class="fas fa-user-graduate"></i> Student Portal</h2>
+            <p class="lead">Select a test to begin your monitored assessment</p>
+        </div>
+
+        <!-- Student Information Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-user"></i> Student Information</h5>
+            </div>
+            <div class="card-body">
+                <form id="studentInfoForm">
+                    <div class="mb-3">
+                        <label for="studentName" class="form-label">Full Name *</label>
+                        <input type="text" class="form-control" id="studentName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="studentId" class="form-label">Student ID (Optional)</label>
+                        <input type="text" class="form-control" id="studentId">
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Available Tests -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-list"></i> Available Tests</h5>
+            </div>
+            <div class="card-body">
+                {% if tests %}
+                <div class="row">
+                    {% for test in tests %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card border-primary h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">{{ test.title }}</h5>
+                                <p class="card-text">{{ test.description }}</p>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <small class="text-muted">
+                                        <i class="fas fa-clock"></i> {{ test.duration_minutes }} minutes
+                                    </small>
+                                    <button class="btn btn-primary" onclick="startTest('{{ test.id }}')">
+                                        <i class="fas fa-play"></i> Start Test
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <h5>No tests available</h5>
+                    <p class="text-muted">Please check back later or contact your administrator.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- System Requirements -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5><i class="fas fa-desktop"></i> System Requirements</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-camera text-primary"></i> Camera Access</h6>
+                        <p class="small">Required for identity verification and monitoring</p>
+                        <div id="cameraStatus" class="mb-3">
+                            <button class="btn btn-sm btn-outline-primary" onclick="checkCamera()">
+                                <i class="fas fa-check"></i> Test Camera
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-microphone text-success"></i> Microphone Access</h6>
+                        <p class="small">Required for audio monitoring</p>
+                        <div id="microphoneStatus" class="mb-3">
+                            <button class="btn btn-sm btn-outline-success" onclick="checkMicrophone()">
+                                <i class="fas fa-check"></i> Test Microphone
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle"></i> Important Guidelines:</h6>
+                    <ul class="mb-0 small">
+                        <li>Ensure you are in a quiet, well-lit room</li>
+                        <li>Keep your face clearly visible throughout the test</li>
+                        <li>Do not use mobile phones or other devices</li>
+                        <li>Do not leave your seat or allow others in the room</li>
+                        <li>Switching tabs or applications is not allowed</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="startTestModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Test Start</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong><i class="fas fa-info-circle"></i> Before you begin:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>Make sure your camera and microphone are working</li>
+                        <li>Close all other applications and browser tabs</li>
+                        <li>You have read and understand the test guidelines</li>
+                    </ul>
+                </div>
+                <p>Once you start the test, monitoring will begin immediately. Are you ready to proceed?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmStartBtn">
+                    <i class="fas fa-play"></i> Start Test
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedTestId = null;
+
+function startTest(testId) {
+    const studentName = document.getElementById('studentName').value.trim();
+    
+    if (!studentName) {
+        alert('Please enter your full name before starting the test.');
+        document.getElementById('studentName').focus();
+        return;
+    }
+    
+    selectedTestId = parseInt(testId);
+    const modal = new bootstrap.Modal(document.getElementById('startTestModal'));
+    modal.show();
+}
+
+document.getElementById('confirmStartBtn').addEventListener('click', function() {
+    const studentName = document.getElementById('studentName').value.trim();
+    const studentId = document.getElementById('studentId').value.trim();
+    
+    const url = `/test/${selectedTestId}?student_name=${encodeURIComponent(studentName)}&student_id=${encodeURIComponent(studentId)}`;
+    window.location.href = url;
+});
+
+async function checkCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById('cameraStatus').innerHTML = 
+            '<span class="badge bg-success"><i class="fas fa-check"></i> Camera OK</span>';
+        stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+        document.getElementById('cameraStatus').innerHTML = 
+            '<span class="badge bg-danger"><i class="fas fa-times"></i> Camera Access Denied</span>';
+        console.error('Camera error:', err);
+    }
+}
+
+async function checkMicrophone() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        document.getElementById('microphoneStatus').innerHTML = 
+            '<span class="badge bg-success"><i class="fas fa-check"></i> Microphone OK</span>';
+        stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+        document.getElementById('microphoneStatus').innerHTML = 
+            '<span class="badge bg-danger"><i class="fas fa-times"></i> Microphone Access Denied</span>';
+        console.error('Microphone error:', err);
+    }
+}
+
+// Auto-check permissions on page load
+window.addEventListener('load', function() {
+    checkCamera();
+    checkMicrophone();
+});
+</script>
+{% endblock %}

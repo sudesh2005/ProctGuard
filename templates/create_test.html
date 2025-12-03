@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+
+{% block title %}Create Test - ProctGuard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h6><i class="fas fa-cogs"></i> Admin Menu</h6>
+            </div>
+            <div class="list-group list-group-flush">
+                <a href="{{ url_for('admin_dashboard') }}" class="list-group-item list-group-item-action">
+                    <i class="fas fa-chart-line"></i> Dashboard
+                </a>
+                <a href="{{ url_for('create_test') }}" class="list-group-item list-group-item-action active">
+                    <i class="fas fa-plus"></i> Create Test
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-10">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="fas fa-plus-circle"></i> Create New Test</h2>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form id="createTestForm">
+                    <!-- Basic Information -->
+                    <div class="row mb-4">
+                        <div class="col-md-8">
+                            <label for="testTitle" class="form-label">Test Title *</label>
+                            <input type="text" class="form-control" id="testTitle" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label for="testDuration" class="form-label">Duration (minutes) *</label>
+                            <input type="number" class="form-control" id="testDuration" min="5" max="180" value="30" required>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="testDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="testDescription" rows="3" 
+                                  placeholder="Brief description of the test content and objectives"></textarea>
+                    </div>
+
+                    <!-- Questions Section -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5><i class="fas fa-question-circle"></i> Questions</h5>
+                            <button type="button" class="btn btn-primary" onclick="addQuestion()">
+                                <i class="fas fa-plus"></i> Add Question
+                            </button>
+                        </div>
+
+                        <div id="questionsContainer">
+                            <!-- Questions will be added here dynamically -->
+                        </div>
+
+                        <div class="text-center mt-3" id="noQuestionsMessage">
+                            <p class="text-muted">No questions added yet. Click "Add Question" to start.</p>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="text-end">
+                        <button type="button" class="btn btn-secondary me-2" onclick="previewTest()">
+                            <i class="fas fa-eye"></i> Preview
+                        </button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save"></i> Save Test
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Question Template -->
+<template id="questionTemplate">
+    <div class="card mb-3 question-item" data-question-index="">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">Question <span class="question-number"></span></h6>
+            <button type="button" class="btn btn-sm btn-danger" onclick="removeQuestion(this)">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="mb-3">
+                <label class="form-label">Question Text *</label>
+                <textarea class="form-control question-text" rows="2" required></textarea>
+            </div>
+            
+            <div class="mb-3">
+                <label class="form-label">Question Type</label>
+                <select class="form-select question-type" onchange="handleQuestionTypeChange(this)">
+                    <option value="multiple_choice">Multiple Choice</option>
+                </select>
+            </div>
+
+            <div class="options-container">
+                <label class="form-label">Answer Options *</label>
+                <div class="options-list">
+                    <!-- Options will be added here -->
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addOption(this)">
+                    <i class="fas fa-plus"></i> Add Option
+                </button>
+            </div>
+
+            <div class="mt-3">
+                <label class="form-label">Correct Answer *</label>
+                <select class="form-select correct-answer" required>
+                    <option value="">Select correct answer...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</template>
+
+<!-- Option Template -->
+<template id="optionTemplate">
+    <div class="input-group mb-2 option-item">
+        <span class="input-group-text option-letter">A</span>
+        <input type="text" class="form-control option-text" placeholder="Enter option text" required>
+        <button type="button" class="btn btn-outline-danger" onclick="removeOption(this)">
+            <i class="fas fa-trash"></i>
+        </button>
+    </div>
+</template>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Test Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let questionCounter = 0;
+
+function addQuestion() {
+    questionCounter++;
+    const template = document.getElementById('questionTemplate');
+    const clone = template.content.cloneNode(true);
+    
+    const questionItem = clone.querySelector('.question-item');
+    questionItem.setAttribute('data-question-index', questionCounter);
+    clone.querySelector('.question-number').textContent = questionCounter;
+    
+    document.getElementById('questionsContainer').appendChild(clone);
+    document.getElementById('noQuestionsMessage').style.display = 'none';
+    
+    // Add initial options
+    const optionsContainer = questionItem.querySelector('.options-list');
+    const addOptionBtn = questionItem.querySelector('.btn-outline-primary');
+    
+    for (let i = 0; i < 4; i++) {
+        addOption(addOptionBtn, false);
+    }
+    
+    updateCorrectAnswerOptions(questionItem);
+}
+
+function addOption(button, updateCorrectAnswer = true) {
+    const questionItem = button.closest('.question-item');
+    const optionsContainer = questionItem.querySelector('.options-list');
+    const template = document.getElementById('optionTemplate');
+    const clone = template.content.cloneNode(true);
+    
+    const optionCount = optionsContainer.children.length;
+    const letter = String.fromCharCode(65 + optionCount); // A, B, C, D...
+    
+    clone.querySelector('.option-letter').textContent = letter;
+    optionsContainer.appendChild(clone);
+    
+    if (updateCorrectAnswer) {
+        updateCorrectAnswerOptions(questionItem);
+    }
+}
+
+function removeOption(button) {
+    const questionItem = button.closest('.question-item');
+    const optionItem = button.closest('.option-item');
+    const optionsContainer = questionItem.querySelector('.options-list');
+    
+    if (optionsContainer.children.length <= 2) {
+        alert('A question must have at least 2 options.');
+        return;
+    }
+    
+    optionItem.remove();
+    
+    // Update option letters
+    const options = optionsContainer.querySelectorAll('.option-item');
+    options.forEach((option, index) => {
+        const letter = String.fromCharCode(65 + index);
+        option.querySelector('.option-letter').textContent = letter;
+    });
+    
+    updateCorrectAnswerOptions(questionItem);
+}
+
+function updateCorrectAnswerOptions(questionItem) {
+    const correctAnswerSelect = questionItem.querySelector('.correct-answer');
+    const options = questionItem.querySelectorAll('.option-item');
+    
+    // Store current selection
+    const currentValue = correctAnswerSelect.value;
+    
+    // Clear and rebuild options
+    correctAnswerSelect.innerHTML = '<option value="">Select correct answer...</option>';
+    
+    options.forEach((option, index) => {
+        const letter = String.fromCharCode(65 + index);
+        const optionElement = document.createElement('option');
+        optionElement.value = index;
+        optionElement.textContent = `${letter} - Option ${index + 1}`;
+        correctAnswerSelect.appendChild(optionElement);
+    });
+    
+    // Restore selection if still valid
+    if (currentValue !== '' && parseInt(currentValue) < options.length) {
+        correctAnswerSelect.value = currentValue;
+    }
+}
+
+function removeQuestion(button) {
+    const questionItem = button.closest('.question-item');
+    questionItem.remove();
+    
+    // Update question numbers
+    const questions = document.querySelectorAll('.question-item');
+    questions.forEach((question, index) => {
+        question.setAttribute('data-question-index', index + 1);
+        question.querySelector('.question-number').textContent = index + 1;
+    });
+    
+    if (questions.length === 0) {
+        document.getElementById('noQuestionsMessage').style.display = 'block';
+    }
+}
+
+function handleQuestionTypeChange(select) {
+    // For now, only multiple choice is supported
+    // This could be extended for other question types
+}
+
+function previewTest() {
+    const testData = collectTestData();
+    if (!testData) return;
+    
+    let previewHtml = `
+        <div class="card">
+            <div class="card-header">
+                <h4>${testData.title}</h4>
+                <p class="mb-0 text-muted">${testData.description || 'No description provided'}</p>
+                <small class="text-muted">Duration: ${testData.duration} minutes</small>
+            </div>
+            <div class="card-body">
+    `;
+    
+    testData.questions.forEach((question, index) => {
+        previewHtml += `
+            <div class="mb-4">
+                <h6><span class="badge bg-primary me-2">${index + 1}</span>${question.question}</h6>
+                <div class="ms-4">
+        `;
+        
+        question.options.forEach((option, optionIndex) => {
+            const isCorrect = optionIndex === question.correct_answer;
+            const badgeClass = isCorrect ? 'bg-success' : 'bg-light text-dark';
+            const letter = String.fromCharCode(65 + optionIndex);
+            
+            previewHtml += `
+                <div class="form-check">
+                    <span class="badge ${badgeClass} me-2">${letter}</span>
+                    ${option}
+                    ${isCorrect ? '<i class="fas fa-check text-success ms-2"></i>' : ''}
+                </div>
+            `;
+        });
+        
+        previewHtml += '</div></div>';
+    });
+    
+    previewHtml += '</div></div>';
+    
+    document.getElementById('previewContent').innerHTML = previewHtml;
+    const modal = new bootstrap.Modal(document.getElementById('previewModal'));
+    modal.show();
+}
+
+function collectTestData() {
+    const title = document.getElementById('testTitle').value.trim();
+    const description = document.getElementById('testDescription').value.trim();
+    const duration = parseInt(document.getElementById('testDuration').value);
+    
+    if (!title) {
+        alert('Please enter a test title.');
+        return null;
+    }
+    
+    if (!duration || duration < 5) {
+        alert('Please enter a valid test duration (minimum 5 minutes).');
+        return null;
+    }
+    
+    const questions = [];
+    const questionItems = document.querySelectorAll('.question-item');
+    
+    if (questionItems.length === 0) {
+        alert('Please add at least one question.');
+        return null;
+    }
+    
+    for (const questionItem of questionItems) {
+        const questionText = questionItem.querySelector('.question-text').value.trim();
+        const correctAnswer = questionItem.querySelector('.correct-answer').value;
+        
+        if (!questionText) {
+            alert('Please fill in all question text fields.');
+            return null;
+        }
+        
+        if (correctAnswer === '') {
+            alert('Please select a correct answer for all questions.');
+            return null;
+        }
+        
+        const options = [];
+        const optionInputs = questionItem.querySelectorAll('.option-text');
+        
+        for (const optionInput of optionInputs) {
+            const optionText = optionInput.value.trim();
+            if (!optionText) {
+                alert('Please fill in all option text fields.');
+                return null;
+            }
+            options.push(optionText);
+        }
+        
+        if (options.length < 2) {
+            alert('Each question must have at least 2 options.');
+            return null;
+        }
+        
+        questions.push({
+            type: 'multiple_choice',
+            question: questionText,
+            options: options,
+            correct_answer: parseInt(correctAnswer)
+        });
+    }
+    
+    return {
+        title: title,
+        description: description,
+        duration: duration,
+        questions: questions
+    };
+}
+
+document.getElementById('createTestForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const testData = collectTestData();
+    if (!testData) return;
+    
+    fetch('/admin/save_test', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(testData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Test created successfully!');
+            window.location.href = '/admin';
+        } else {
+            alert('Error creating test. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error creating test. Please try again.');
+    });
+});
+
+// Add initial question
+window.addEventListener('load', function() {
+    addQuestion();
+});
+</script>
+{% endblock %}
