@@ -196,6 +196,11 @@ function viewEvidence(evidencePath, type) {
     const modal = new bootstrap.Modal(document.getElementById('evidenceModal'));
     const content = document.getElementById('evidenceContent');
     
+    // Ensure the path starts with / for proper Flask static file serving
+    if (!evidencePath.startsWith('/') && !evidencePath.startsWith('http')) {
+        evidencePath = '/' + evidencePath;
+    }
+    
     if (type === 'image') {
         content.innerHTML = `<img src="${evidencePath}" class="img-fluid" alt="Evidence Screenshot">`;
     } else if (type === 'audio') {

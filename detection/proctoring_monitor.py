@@ -9,8 +9,10 @@ from models.database import get_db_connection
 from models.object_detection import detectObject
 
 class ProctoringMonitor:
-    def __init__(self, session_id):
+    def __init__(self, session_id, storage_mode='disk'):
         self.session_id = session_id
+        # storage_mode determines whether evidence is saved to 'disk' or 'db'
+        self.storage_mode = storage_mode
         
         # Initialize MediaPipe for face detection
         self.mp_face_detection = mp.solutions.face_detection
@@ -35,6 +37,19 @@ class ProctoringMonitor:
         self.BOOK_DETECTION_THRESHOLD = 10  # ~0.33 seconds
         self.MULTIPLE_PERSONS_THRESHOLD = 15  # 0.5 seconds
         self.HEAD_POSE_ANGLE_THRESHOLD = 30  # degrees
+
+        # Time-based confirmation window for violations (3-5 seconds for better responsiveness)
+        self.VIOLATION_CONFIRM_SECONDS = {
+            'NO_PERSON_DETECTED': 5,  # 5 seconds to confirm no person
+            'PHONE_DETECTED': 3,      # 3 seconds to confirm phone
+            'BOOK_DETECTED': 3,       # 3 seconds to confirm book
+            'MULTIPLE_PERSONS': 3,    # 3 seconds to confirm multiple persons
+            'MULTIPLE_FACES': 3,      # 3 seconds to confirm multiple faces
+            'FACE_NOT_VISIBLE': 5,    # 5 seconds to confirm face lost
+            'SUSPICIOUS_HEAD_MOVEMENT': 2  # 2 seconds for head movement
+        }
+        # Track first detection timestamps per violation type
+        self._first_detection_time = {}
         
     def _detect_with_yolo(self, frame):
         """Use YOLO for comprehensive object detection"""
@@ -44,52 +59,53 @@ class ProctoringMonitor:
             # Use YOLO object detection from the imported module
             labels, processed_frame, person_count, detected_objects = detectObject(frame, confidence_threshold=0.6)
             
-            # Check for multiple persons
+            # Check for multiple persons (with timer confirmation)
             if person_count > 1:
-                self.multiple_persons_frames += 1
-                if self.multiple_persons_frames >= self.MULTIPLE_PERSONS_THRESHOLD:
+                self._start_or_check_timer('MULTIPLE_PERSONS')
+                if self._timer_matured('MULTIPLE_PERSONS'):
                     violations.append({
                         'type': 'MULTIPLE_PERSONS',
                         'description': f'{person_count} persons detected in frame',
                         'severity': 'HIGH'
                     })
-                    self.multiple_persons_frames = 0
             else:
-                self.multiple_persons_frames = max(0, self.multiple_persons_frames - 1)
+                self._clear_timer('MULTIPLE_PERSONS')
             
-            # Check for no person detected
+            # Check for no person detected (with timer confirmation)
             if person_count == 0:
-                violations.append({
-                    'type': 'NO_PERSON_DETECTED',
-                    'description': 'No person detected in frame',
-                    'severity': 'HIGH'
-                })
+                self._start_or_check_timer('NO_PERSON_DETECTED')
+                if self._timer_matured('NO_PERSON_DETECTED'):
+                    violations.append({
+                        'type': 'NO_PERSON_DETECTED',
+                        'description': 'No person detected in frame',
+                        'severity': 'HIGH'
+                    })
+            else:
+                self._clear_timer('NO_PERSON_DETECTED')
             
-            # Check for cell phone detection
+            # Check for cell phone detection (with timer confirmation)
             if "cell phone" in detected_objects:
-                self.phone_detected_frames += 1
-                if self.phone_detected_frames >= self.PHONE_DETECTION_THRESHOLD:
+                self._start_or_check_timer('PHONE_DETECTED')
+                if self._timer_matured('PHONE_DETECTED'):
                     violations.append({
                         'type': 'PHONE_DETECTED',
                         'description': 'Cell phone detected in frame',
                         'severity': 'HIGH'
                     })
-                    self.phone_detected_frames = 0
             else:
-                self.phone_detected_frames = max(0, self.phone_detected_frames - 1)
+                self._clear_timer('PHONE_DETECTED')
             
-            # Check for book detection
+            # Check for book detection (with timer confirmation)
             if "book" in detected_objects:
-                self.book_detected_frames += 1
-                if self.book_detected_frames >= self.BOOK_DETECTION_THRESHOLD:
+                self._start_or_check_timer('BOOK_DETECTED')
+                if self._timer_matured('BOOK_DETECTED'):
                     violations.append({
                         'type': 'BOOK_DETECTED',
                         'description': 'Book or reading material detected',
                         'severity': 'MEDIUM'
                     })
-                    self.book_detected_frames = 0
             else:
-                self.book_detected_frames = max(0, self.book_detected_frames - 1)
+                self._clear_timer('BOOK_DETECTED')
                 
         except Exception as e:
             print(f"YOLO detection error: {e}")
@@ -132,8 +148,8 @@ class ProctoringMonitor:
             
             # Save evidence if violations detected
             if violations:
-                evidence_path = self._save_evidence(frame, violations)
-                self._log_violations(violations, evidence_path)
+                evidence_path, evidence_blob = self._save_evidence(frame, violations)
+                self._log_violations(violations, evidence_path, evidence_blob)
             
             return violations
             
@@ -147,29 +163,27 @@ class ProctoringMonitor:
         results = self.face_detection.process(rgb_frame)
         
         if not results.detections:
-            self.face_lost_frames += 1
-            if self.face_lost_frames >= self.FACE_LOST_THRESHOLD:
+            self._start_or_check_timer('FACE_NOT_VISIBLE')
+            if self._timer_matured('FACE_NOT_VISIBLE'):
                 violations.append({
                     'type': 'FACE_NOT_VISIBLE',
                     'description': 'Student face not visible',
                     'severity': 'HIGH'
                 })
-                self.face_lost_frames = 0  # Reset to avoid spam
         else:
-            self.face_lost_frames = 0
+            self._clear_timer('FACE_NOT_VISIBLE')
             
-            # Check for multiple faces
+            # Check for multiple faces (with timer confirmation)
             if len(results.detections) > 1:
-                self.multiple_faces_frames += 1
-                if self.multiple_faces_frames >= self.MULTIPLE_FACES_THRESHOLD:
+                self._start_or_check_timer('MULTIPLE_FACES')
+                if self._timer_matured('MULTIPLE_FACES'):
                     violations.append({
                         'type': 'MULTIPLE_PERSONS',
                         'description': f'{len(results.detections)} faces detected',
                         'severity': 'HIGH'
                     })
-                    self.multiple_faces_frames = 0
             else:
-                self.multiple_faces_frames = 0
+                self._clear_timer('MULTIPLE_FACES')
         
         return violations
     
@@ -187,13 +201,17 @@ class ProctoringMonitor:
             # Calculate head rotation (simplified)
             ear_diff = abs(left_ear.y - right_ear.y)
             
-            # If head is tilted significantly or looking away
+            # If head is tilted significantly or looking away (with timer confirmation)
             if ear_diff > 0.05:  # Threshold for head tilt
-                violations.append({
-                    'type': 'SUSPICIOUS_HEAD_MOVEMENT',
-                    'description': 'Suspicious head movement detected',
-                    'severity': 'MEDIUM'
-                })
+                self._start_or_check_timer('SUSPICIOUS_HEAD_MOVEMENT')
+                if self._timer_matured('SUSPICIOUS_HEAD_MOVEMENT'):
+                    violations.append({
+                        'type': 'SUSPICIOUS_HEAD_MOVEMENT',
+                        'description': 'Suspicious head movement detected',
+                        'severity': 'MEDIUM'
+                    })
+            else:
+                self._clear_timer('SUSPICIOUS_HEAD_MOVEMENT')
         
         return violations
     
@@ -214,35 +232,51 @@ class ProctoringMonitor:
         return violations
     
     def _save_evidence(self, frame, violations):
-        """Save screenshot as evidence"""
+        """Save screenshot as evidence to disk or prepare as BLOB for DB"""
         try:
-            evidence_dir = f"static/uploads/evidence/{self.session_id}"
-            os.makedirs(evidence_dir, exist_ok=True)
-            
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            evidence_filename = f"{timestamp}_{uuid.uuid4().hex[:8]}.jpg"
-            evidence_path = os.path.join(evidence_dir, evidence_filename)
-            
-            cv2.imwrite(evidence_path, frame)
-            return evidence_path
+            # Encode frame to JPEG for DB storage if needed
+            ok, buffer = cv2.imencode('.jpg', frame)
+            if not ok:
+                raise RuntimeError('Failed to encode frame as JPEG')
+            evidence_blob = buffer.tobytes()
+
+            evidence_path = None
+            if self.storage_mode == 'disk':
+                evidence_dir = f"static/uploads/evidence/{self.session_id}"
+                os.makedirs(evidence_dir, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                evidence_filename = f"{timestamp}_{uuid.uuid4().hex[:8]}.jpg"
+                evidence_path = os.path.join(evidence_dir, evidence_filename)
+                # Normalize path to use forward slashes for URL compatibility
+                evidence_path = evidence_path.replace('\\', '/')
+                cv2.imwrite(evidence_path, frame)
+
+            return evidence_path, evidence_blob
         except Exception as e:
             print(f"Error saving evidence: {e}")
-            return None
+            return None, None
     
-    def _log_violations(self, violations, evidence_path):
-        """Log violations to database"""
+    def _log_violations(self, violations, evidence_path, evidence_blob):
+        """Log violations to database with evidence path or BLOB depending on storage_mode"""
         conn = get_db_connection()
-        
-        for violation in violations:
-            conn.execute('''
-                INSERT INTO cheating_logs 
-                (session_id, violation_type, description, severity, timestamp, evidence_path)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (self.session_id, violation['type'], violation['description'],
-                  violation['severity'], datetime.now().isoformat(), evidence_path))
-        
-        conn.commit()
-        conn.close()
+        try:
+            for violation in violations:
+                conn.execute('''
+                    INSERT INTO cheating_logs 
+                    (session_id, violation_type, description, severity, timestamp, evidence_path, evidence_blob)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    self.session_id,
+                    violation['type'],
+                    violation['description'],
+                    violation['severity'],
+                    datetime.now().isoformat(),
+                    evidence_path if self.storage_mode == 'disk' else None,
+                    evidence_blob if self.storage_mode == 'db' else None
+                ))
+            conn.commit()
+        finally:
+            conn.close()
     
     def process_audio(self, audio_data):
         """Process audio data for violations"""
@@ -264,3 +298,23 @@ class ProctoringMonitor:
             print(f"Error processing audio: {e}")
         
         return violations
+
+    def _start_or_check_timer(self, violation_type):
+        """Start a timer for a violation type if not already started"""
+        now = datetime.now()
+        if violation_type not in self._first_detection_time:
+            self._first_detection_time[violation_type] = now
+
+    def _clear_timer(self, violation_type):
+        """Clear the timer for a violation type when condition is no longer present"""
+        if violation_type in self._first_detection_time:
+            del self._first_detection_time[violation_type]
+
+    def _timer_matured(self, violation_type):
+        """Return True if the violation has persisted long enough based on type"""
+        start = self._first_detection_time.get(violation_type)
+        if not start:
+            return False
+        elapsed = (datetime.now() - start).total_seconds()
+        required_seconds = self.VIOLATION_CONFIRM_SECONDS.get(violation_type, 3)
+        return elapsed >= required_seconds

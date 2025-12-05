@@ -46,6 +46,7 @@ def init_db():
             severity TEXT NOT NULL,  -- LOW, MEDIUM, HIGH
             timestamp TIMESTAMP NOT NULL,
             evidence_path TEXT,  -- Path to screenshot or audio file
+            evidence_blob BLOB,  -- Optional binary evidence stored in DB
             metadata TEXT,  -- Additional JSON data
             FOREIGN KEY (session_id) REFERENCES test_sessions (id)
         )
